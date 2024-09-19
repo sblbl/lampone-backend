@@ -4,13 +4,14 @@ from firebase_admin import credentials, db
 from escpos.printer import Usb
 import cups
 import base64
-from PIL import Image
+from PIL import Image, ImageOps
 from io import BytesIO
 import re
 import time
 import os
 
 folder = '/home/sblbl/Desktop/code/lampone/backend/'
+print_w = 512
 
 load_dotenv()
 conn = cups.Connection()
@@ -45,29 +46,64 @@ def parse_format(text):
 	formatted_parts = re.split(r'(\*\*.*?\*\*|_.*?_)', text)
 	for part in formatted_parts:
 		if part.startswith('**') and part.endswith('**'):
-			p.set(bold=True)
+			p.set(bold=True, font='a')
 			p.text(part[2:-2])
-			p.set(bold=False)
+			p.set_with_default()
 		elif part.startswith('_') and part.endswith('_'):
 			p.set(underline=1) 
 			p.text(part[1:-1])
 			p.set(underline=0)
+			p.set_with_default()
 		else:
 			p.text(part)
-	p.text('\n')
+	p.ln(2)
 
 def msg_listener(event):
 	print(f'msg event: {event.data}')
 
 def text_listener(event):
-	print(f'text event: {event.data}')
+	print('text event')
 	if event.data != '':
 		for line in event.data:
-			p.set(align=line['align'])
-			#p.textln(line['text'])
-			parse_format(line['text'])
+			if line['image'] == False:
+				p.set(align=line['align'])
+				#p.textln(line['text'])
+				parse_format(line['text'])
+			else:
+				image_bytes = base64_to_image(line['text'])
+				image = Image.open(BytesIO(image_bytes))
+				#get the width and height of the image
+				width, height = image.size
+				if width > height:
+					new_width = 400
+					new_height = int(new_width * height / width)
+					image = image.resize((new_width, new_height))
+					if line['align'] == 'center':
+						padding = (print_w - new_width) // 2 
+						image = ImageOps.expand(image, (padding, 0, padding, 0), fill='white')
+					elif line['align'] == 'right':
+						padding = print_w - new_width
+						image = ImageOps.expand(image, (padding, 0, 0, 0), fill='white')
+					else:
+						image = ImageOps.expand(image)
+				else:
+					new_height = 400
+					new_width = int(new_height * width / height)
+					if line['align'] == 'center':
+						padding = (print_w - new_width) // 2
+						image = image.resize((new_width, new_height))
+						image = ImageOps.expand(image, (padding, 0, padding, 0), fill='white')
+					elif line['align'] == 'right':
+						padding = print_w - new_width
+						image = image.resize((new_width, new_height))
+						image = ImageOps.expand(image, (padding, 0, 0, 0), fill='white')
+					else:
+						image = image.resize((new_width, new_height))
+						image = ImageOps.expand(image)
+				p.image(image)
+				
 		p.ln(1)
-		p.cut()
+		#p.cut()
 		refText.set('')
 	
 print_queue = {}
