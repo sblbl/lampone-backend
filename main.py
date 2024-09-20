@@ -42,11 +42,11 @@ def create_image_from_bytes(image_bytes):
 	image = Image.open(image_stream)
 	return image
 
-def parse_format(text):
+def parse_format(text, ln=2):
 	formatted_parts = re.split(r'(\*\*.*?\*\*|_.*?_)', text)
 	for part in formatted_parts:
 		if part.startswith('**') and part.endswith('**'):
-			p.set(bold=True, font='a')
+			p.set(bold=True)
 			p.text(part[2:-2])
 			p.set_with_default()
 		elif part.startswith('_') and part.endswith('_'):
@@ -56,7 +56,7 @@ def parse_format(text):
 			p.set_with_default()
 		else:
 			p.text(part)
-	p.ln(2)
+	p.ln(ln)
 
 def msg_listener(event):
 	print(f'msg event: {event.data}')
@@ -64,18 +64,25 @@ def msg_listener(event):
 def text_listener(event):
 	print('text event')
 	if event.data != '':
-		for line in event.data:
+		p.ln(2)
+		p.set_with_default()
+		for i, line in enumerate(event.data):
 			if line['image'] == False:
 				p.set(align=line['align'])
-				#p.textln(line['text'])
-				parse_format(line['text'])
+				# check if last line and if next line is text
+				ln = 2
+				"""
+				if i < len(event.data) - 1 and event.data[i + 1]['image'] == True:
+					ln = 4			
+				"""
+				parse_format(line['text'], ln)
 			else:
 				image_bytes = base64_to_image(line['text'])
 				image = Image.open(BytesIO(image_bytes))
 				#get the width and height of the image
 				width, height = image.size
 				if width > height:
-					new_width = 400
+					new_width = 450
 					new_height = int(new_width * height / width)
 					image = image.resize((new_width, new_height))
 					if line['align'] == 'center':
@@ -87,7 +94,7 @@ def text_listener(event):
 					else:
 						image = ImageOps.expand(image)
 				else:
-					new_height = 400
+					new_height = 500
 					new_width = int(new_height * width / height)
 					if line['align'] == 'center':
 						padding = (print_w - new_width) // 2
@@ -101,9 +108,10 @@ def text_listener(event):
 						image = image.resize((new_width, new_height))
 						image = ImageOps.expand(image)
 				p.image(image)
+				p.ln(1)
 				
-		p.ln(1)
-		#p.cut()
+		p.ln(2)
+		p.cut()
 		refText.set('')
 	
 print_queue = {}
